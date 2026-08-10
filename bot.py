@@ -15,8 +15,9 @@ intents.members = True
 bot = commands.Bot(command_prefix='?', intents=intents)
 
 # Globale Speicher-Variablen
-status_message_id = None
-last_roblox_version = None
+executor_status_msg_id = None
+roblox_version_msg_id = None
+last_versions = {}  # Merkt sich den letzten Stand aller Plattformen (Windows, Mac, Android, iOS)
 
 
 # -------------------------------------------------------------------
@@ -39,7 +40,6 @@ async def start_web_server():
 @bot.event
 async def on_ready():
     print(f'Bot is online as {bot.user.name}!')
-    # Start loop for 30-minute automated updates
     if not auto_check_updates.is_running():
         auto_check_updates.start()
 
@@ -52,7 +52,6 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Check if message is in #not-general
     if "not-general" in message.channel.name.lower():
         try:
             await message.delete()
@@ -72,54 +71,96 @@ async def on_message(message):
 
 
 # -------------------------------------------------------------------
-# FEATURE 2: Roblox Version & Executors Tracker (Every 30 Mins)
+# FEATURE 2: Roblox Versions & Executors Tracker (Every 30 Mins)
 # -------------------------------------------------------------------
 @tasks.loop(minutes=30)
 async def auto_check_updates():
-    global status_message_id, last_roblox_version
+    global executor_status_msg_id, roblox_version_msg_id, last_versions
 
     await bot.wait_until_ready()
 
     async with aiohttp.ClientSession() as session:
-        # --- PART A: ROBLOX VERSION CHECK ---
+        # --- PART A: ROBLOX VERSIONS CHECK ALL PLATFORMS ---
         try:
             async with session.get("https://weao.xyz/api/versions/current") as resp:
                 if resp.status == 200:
                     vdata = await resp.json()
-                    current_win_version = vdata.get("Windows", "N/A")
-                    win_date = vdata.get("WindowsDate", "N/A")
 
-                    # Erster Durchlauf: Stand nur merken
-                    if last_roblox_version is None:
-                        last_roblox_version = current_win_version
-                        print(f"[ROBLOX] Initialized Windows Version: {current_win_version}")
-                    
-                    # Wenn sich die Version geändert hat
-                    elif current_win_version != last_roblox_version:
-                        print(f"[ROBLOX] New version detected! Old: {last_roblox_version} -> New: {current_win_version}")
-                        last_roblox_version = current_win_version
+                    platforms = ["Windows", "Mac", "Android", "iOS"]
+                    current_state = {}
+                    updates_detected = []
 
-                        # Nachricht in #roblox-version posten
-                        version_channel = None
-                        for guild in bot.guilds:
-                            version_channel = discord.utils.get(guild.text_channels, name="roblox-version") or \
-                                              discord.utils.get(guild.text_channels, name="🔔roblox-version")
-                            if version_channel:
-                                break
+                    for plat in platforms:
+                        ver = vdata.get(plat, "N/A")
+                        date_str = vdata.get(f"{plat}Date", "N/A")
+                        current_state[plat] = ver
 
+                        # Überprüfen, ob sich eine Version geändert hat
+                        if plat in last_versions and last_versions[plat] != ver:
+                            updates_detected.append((plat, last_versions[plat], ver))
+
+                    # Speicher aktualisieren
+                    first_run = len(last_versions) == 0
+                    last_versions = current_state
+
+                    # Kanal suchen
+                    version_channel = None
+                    for guild in bot.guilds:
+                        version_channel = discord.utils.get(guild.text_channels, name="roblox-version") or \
+                                          discord.utils.get(guild.text_channels, name="🔔roblox-version")
                         if version_channel:
-                            embed = discord.Embed(
-                                title="🔔 New Roblox Update Detected!",
-                                color=discord.Color.blue(),
-                                timestamp=datetime.datetime.now(datetime.timezone.utc)
+                            break
+
+                    if version_channel:
+                        # 1. Haupt-Embed mit Übersicht aller Plattformen erstellen
+                        overview_embed = discord.Embed(
+                            title="🎮 Current Roblox Versions",
+                            url="https://weao.xyz",
+                            color=discord.Color.blue(),
+                            timestamp=datetime.datetime.now(datetime.timezone.utc)
+                        )
+
+                        for plat in platforms:
+                            ver = vdata.get(plat, "N/A")
+                            dt = vdata.get(f"{plat}Date", "N/A")
+                            overview_embed.add_field(
+                                name=f"📱 {plat}" if plat in ["Android", "iOS"] else f"💻 {plat}",
+                                value=f"Version: `{ver}`\nUpdated: `{dt}`",
+                                inline=False
                             )
-                            embed.add_field(name="Platform", value="Windows PC", inline=True)
-                            embed.add_field(name="New Version", value=f"`{current_win_version}`", inline=True)
-                            embed.add_field(name="Updated At", value=win_date, inline=False)
-                            embed.set_footer(text="Auto-detected | WEAO API")
-                            
-                            await version_channel.send(embed=embed)
-                            print("[ROBLOX] Posted update alert in #roblox-version.")
+
+                        overview_embed.set_footer(text="Auto-updates every 30 min | Source: weao.xyz")
+
+                        # Dashboard-Botschaft senden oder editieren
+                        if roblox_version_msg_id:
+                            try:
+                                msg = await version_channel.fetch_message(roblox_version_msg_id)
+                                await msg.edit(embed=overview_embed)
+                                print("[ROBLOX] Updated main version dashboard embed.")
+                            except discord.NotFound:
+                                roblox_version_msg_id = None
+
+                        if not roblox_version_msg_id:
+                            new_msg = await version_channel.send(embed=overview_embed)
+                            roblox_version_msg_id = new_msg.id
+                            print("[ROBLOX] Posted initial main version dashboard embed.")
+
+                        # 2. Falls es ein Update gab (und es nicht der allererste Start ist) -> Ping / Alert senden
+                        if updates_detected and not first_run:
+                            for plat, old_v, new_v in updates_detected:
+                                alert_embed = discord.Embed(
+                                    title=f"🚨 Roblox Update Detected for {plat}!",
+                                    color=discord.Color.gold(),
+                                    timestamp=datetime.datetime.now(datetime.timezone.utc)
+                                )
+                                alert_embed.add_field(name="Platform", value=plat, inline=True)
+                                alert_embed.add_field(name="Old Version", value=f"`{old_v}`", inline=True)
+                                alert_embed.add_field(name="New Version", value=f"`{new_v}`", inline=True)
+                                alert_embed.set_footer(text="Auto-detected | WEAO API")
+                                
+                                await version_channel.send(embed=alert_embed)
+                                print(f"[ROBLOX] Alert posted for {plat} update.")
+
         except Exception as e:
             print(f"[ERROR] Roblox Version Check: {e}")
 
@@ -170,17 +211,17 @@ async def auto_check_updates():
                         current_embed.set_footer(text="Auto-updates every 30 min | Source: weao.xyz")
                         embeds_list.append(current_embed)
 
-                        if status_message_id:
+                        if executor_status_msg_id:
                             try:
-                                msg = await exec_channel.fetch_message(status_message_id)
+                                msg = await exec_channel.fetch_message(executor_status_msg_id)
                                 await msg.edit(embeds=embeds_list)
                                 print("[EXECUTORS] Status message updated.")
                             except discord.NotFound:
-                                status_message_id = None
+                                executor_status_msg_id = None
 
-                        if not status_message_id:
+                        if not executor_status_msg_id:
                             new_msg = await exec_channel.send(embeds=embeds_list)
-                            status_message_id = new_msg.id
+                            executor_status_msg_id = new_msg.id
                             print("[EXECUTORS] Posted new status message.")
         except Exception as e:
             print(f"[ERROR] Executors Check: {e}")

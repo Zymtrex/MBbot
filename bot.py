@@ -14,10 +14,14 @@ intents.members = True
 # Command prefix set to '?'
 bot = commands.Bot(command_prefix='?', intents=intents)
 
-# Store message ID for editing the exact same message every 30 minutes
+# Globale Speicher-Variablen
 status_message_id = None
+last_roblox_version = None
 
-# Dummy Webserver für Render Port-Binding
+
+# -------------------------------------------------------------------
+# DUMMY WEBSERVER FOR RENDER PORT BINDING
+# -------------------------------------------------------------------
 async def handle_ping(request):
     return web.Response(text="Bot is running!")
 
@@ -31,12 +35,13 @@ async def start_web_server():
     await site.start()
     print(f"[WEB] Dummy server running on port {port}")
 
+
 @bot.event
 async def on_ready():
     print(f'Bot is online as {bot.user.name}!')
-    # Start the 30-minute background loop
-    if not auto_check_executors.is_running():
-        auto_check_executors.start()
+    # Start loop for 30-minute automated updates
+    if not auto_check_updates.is_running():
+        auto_check_updates.start()
 
 
 # -------------------------------------------------------------------
@@ -47,7 +52,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Check if the message was sent in #not-general
+    # Check if message is in #not-general
     if "not-general" in message.channel.name.lower():
         try:
             await message.delete()
@@ -58,7 +63,7 @@ async def on_message(message):
             )
             print(f"[HONEYPOT] {message.author} was automatically banned.")
         except discord.Forbidden:
-            print(f"[ERROR] Missing permissions to ban {message.author}. Check bot role position.")
+            print(f"[ERROR] Missing permissions to ban {message.author}.")
         except Exception as e:
             print(f"[ERROR] {e}")
         return
@@ -67,83 +72,118 @@ async def on_message(message):
 
 
 # -------------------------------------------------------------------
-# FEATURE 2: Auto-Update Executors every 30 Minutes
+# FEATURE 2: Roblox Version & Executors Tracker (Every 30 Mins)
 # -------------------------------------------------------------------
 @tasks.loop(minutes=30)
-async def auto_check_executors():
-    global status_message_id
+async def auto_check_updates():
+    global status_message_id, last_roblox_version
 
     await bot.wait_until_ready()
 
-    target_channel = None
-    for guild in bot.guilds:
-        target_channel = discord.utils.get(guild.text_channels, name="📡executors") or \
-                         discord.utils.get(guild.text_channels, name="executors")
-        if target_channel:
-            break
-
-    if not target_channel:
-        print("[EXECUTORS] Could not find channel '📡executors'.")
-        return
-
     async with aiohttp.ClientSession() as session:
+        # --- PART A: ROBLOX VERSION CHECK ---
         try:
-            async with session.get("https://weao.xyz/api/status/exploits") as response:
-                if response.status == 200:
-                    data = await response.json()
+            async with session.get("https://weao.xyz/api/versions/current") as resp:
+                if resp.status == 200:
+                    vdata = await resp.json()
+                    current_win_version = vdata.get("Windows", "N/A")
+                    win_date = vdata.get("WindowsDate", "N/A")
 
-                    embeds_list = []
-                    current_embed = discord.Embed(
-                        title="🛰️ Executor Status Overview",
-                        url="https://weao.xyz",
-                        color=discord.Color.purple(),
-                        timestamp=datetime.datetime.now(datetime.timezone.utc)
-                    )
+                    # Erster Durchlauf: Stand nur merken
+                    if last_roblox_version is None:
+                        last_roblox_version = current_win_version
+                        print(f"[ROBLOX] Initialized Windows Version: {current_win_version}")
+                    
+                    # Wenn sich die Version geändert hat
+                    elif current_win_version != last_roblox_version:
+                        print(f"[ROBLOX] New version detected! Old: {last_roblox_version} -> New: {current_win_version}")
+                        last_roblox_version = current_win_version
 
-                    field_count = 0
-                    for item in data:
-                        if field_count >= 25:
-                            embeds_list.append(current_embed)
-                            current_embed = discord.Embed(
-                                color=discord.Color.purple(),
+                        # Nachricht in #roblox-version posten
+                        version_channel = None
+                        for guild in bot.guilds:
+                            version_channel = discord.utils.get(guild.text_channels, name="roblox-version") or \
+                                              discord.utils.get(guild.text_channels, name="🔔roblox-version")
+                            if version_channel:
+                                break
+
+                        if version_channel:
+                            embed = discord.Embed(
+                                title="🔔 New Roblox Update Detected!",
+                                color=discord.Color.blue(),
                                 timestamp=datetime.datetime.now(datetime.timezone.utc)
                             )
-                            field_count = 0
-
-                        name = item.get("title") or item.get("name", "Unknown")
-                        version = item.get("version", "N/A")
-
-                        # Exact WEAO Status Key
-                        updated = bool(item.get("updateStatus", False))
-
-                        status_str = "🟢 **UPDATED**" if updated else "🔴 **NOT UPDATED**"
-                        current_embed.add_field(
-                            name=name,
-                            value=f"Status: {status_str}\nVersion: `{version}`",
-                            inline=True
-                        )
-                        field_count += 1
-
-                    current_embed.set_footer(text="Auto-updates every 30 min | Source: weao.xyz")
-                    embeds_list.append(current_embed)
-
-                    if status_message_id:
-                        try:
-                            msg = await target_channel.fetch_message(status_message_id)
-                            await msg.edit(embeds=embeds_list)
-                            print("[EXECUTORS] Status message updated successfully.")
-                            return
-                        except discord.NotFound:
-                            status_message_id = None
-
-                    new_msg = await target_channel.send(embeds=embeds_list)
-                    status_message_id = new_msg.id
-                    print("[EXECUTORS] Posted new status message.")
-
-                else:
-                    print(f"[EXECUTORS] API returned status code {response.status}")
+                            embed.add_field(name="Platform", value="Windows PC", inline=True)
+                            embed.add_field(name="New Version", value=f"`{current_win_version}`", inline=True)
+                            embed.add_field(name="Updated At", value=win_date, inline=False)
+                            embed.set_footer(text="Auto-detected | WEAO API")
+                            
+                            await version_channel.send(embed=embed)
+                            print("[ROBLOX] Posted update alert in #roblox-version.")
         except Exception as e:
-            print(f"[EXECUTORS] Error fetching status: {e}")
+            print(f"[ERROR] Roblox Version Check: {e}")
+
+        # --- PART B: EXECUTORS STATUS OVERVIEW ---
+        try:
+            async with session.get("https://weao.xyz/api/status/exploits") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+
+                    exec_channel = None
+                    for guild in bot.guilds:
+                        exec_channel = discord.utils.get(guild.text_channels, name="executors") or \
+                                       discord.utils.get(guild.text_channels, name="📡executors")
+                        if exec_channel:
+                            break
+
+                    if exec_channel:
+                        embeds_list = []
+                        current_embed = discord.Embed(
+                            title="🛰️ Executor Status Overview",
+                            url="https://weao.xyz",
+                            color=discord.Color.purple(),
+                            timestamp=datetime.datetime.now(datetime.timezone.utc)
+                        )
+
+                        field_count = 0
+                        for item in data:
+                            if field_count >= 25:
+                                embeds_list.append(current_embed)
+                                current_embed = discord.Embed(
+                                    color=discord.Color.purple(),
+                                    timestamp=datetime.datetime.now(datetime.timezone.utc)
+                                )
+                                field_count = 0
+
+                            name = item.get("title") or item.get("name", "Unknown")
+                            version = item.get("version", "N/A")
+                            updated = bool(item.get("updateStatus", False))
+
+                            status_str = "🟢 **UPDATED**" if updated else "🔴 **NOT UPDATED**"
+                            current_embed.add_field(
+                                name=name,
+                                value=f"Status: {status_str}\nVersion: `{version}`",
+                                inline=True
+                            )
+                            field_count += 1
+
+                        current_embed.set_footer(text="Auto-updates every 30 min | Source: weao.xyz")
+                        embeds_list.append(current_embed)
+
+                        if status_message_id:
+                            try:
+                                msg = await exec_channel.fetch_message(status_message_id)
+                                await msg.edit(embeds=embeds_list)
+                                print("[EXECUTORS] Status message updated.")
+                            except discord.NotFound:
+                                status_message_id = None
+
+                        if not status_message_id:
+                            new_msg = await exec_channel.send(embeds=embeds_list)
+                            status_message_id = new_msg.id
+                            print("[EXECUTORS] Posted new status message.")
+        except Exception as e:
+            print(f"[ERROR] Executors Check: {e}")
 
 
 # -------------------------------------------------------------------
@@ -157,13 +197,8 @@ async def send_update(ctx, *, update_text: str):
     except discord.Forbidden:
         pass
 
-    target_channel = discord.utils.get(
-        ctx.guild.text_channels, 
-        name="🔄updates"
-    ) or discord.utils.get(
-        ctx.guild.text_channels, 
-        name="updates"
-    ) or ctx.channel
+    target_channel = discord.utils.get(ctx.guild.text_channels, name="updates") or \
+                     discord.utils.get(ctx.guild.text_channels, name="🔄updates") or ctx.channel
 
     embed = discord.Embed(
         title="🔄 New Update",
@@ -182,9 +217,8 @@ async def send_update(ctx, *, update_text: str):
 
 
 async def main():
-    # Start dummy web server for Render
     await start_web_server()
-    # Start bot
+    # TRAGE HIER DEINEN BOT TOKEN EIN:
     await bot.start('MTUzNjE2NDA2NTIwMDgzNjYxOA.Gn_AvI.xUxrdgDOEmbWMJgJJ0LnGMygvmkrJzTthkR66U')
 
 if __name__ == "__main__":

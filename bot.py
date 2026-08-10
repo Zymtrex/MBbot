@@ -1,7 +1,10 @@
 import discord
 from discord.ext import commands, tasks
 import aiohttp
+from aiohttp import web
 import datetime
+import os
+import asyncio
 
 # Configure Intents
 intents = discord.Intents.default()
@@ -13,6 +16,20 @@ bot = commands.Bot(command_prefix='?', intents=intents)
 
 # Store message ID for editing the exact same message every 30 minutes
 status_message_id = None
+
+# Dummy Webserver für Render Port-Binding
+async def handle_ping(request):
+    return web.Response(text="Bot is running!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"[WEB] Dummy server running on port {port}")
 
 @bot.event
 async def on_ready():
@@ -164,5 +181,11 @@ async def send_update(ctx, *, update_text: str):
     await target_channel.send(embed=embed)
 
 
-# Trage hier deinen NEUEN Bot-Token ein:
-bot.run('MTUzNjE2NDA2NTIwMDgzNjYxOA.Gn_AvI.xUxrdgDOEmbWMJgJJ0LnGMygvmkrJzTthkR66U')
+async def main():
+    # Start dummy web server for Render
+    await start_web_server()
+    # Start bot
+    await bot.start('MTUzNjE2NDA2NTIwMDgzNjYxOA.Gn_AvI.xUxrdgDOEmbWMJgJJ0LnGMygvmkrJzTthkR66U')
+
+if __name__ == "__main__":
+    asyncio.run(main())

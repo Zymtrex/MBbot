@@ -260,7 +260,7 @@ async def send_update(ctx, *, update_text: str):
 async def main():
     await start_web_server()
     # TRAGE HIER DEINEN BOT TOKEN EIN:
-    await bot.start('MTUzNjE2NDA2NTIwMDgzNjYxOA.Gn_AvI.xUxrdgDOEmbWMJgJJ0LnGMygvmkrJzTthkR66U')
+    await bot.start('MTUzNjE2NDA2NTIwMDgzNjYxOA.GMa-_2.9oxEN0NfYIK0b0xG_lpi4YYoKFXG_BjrJN6rJ8')
 
 if __name__ == "__main__":
     asyncio.run(main())

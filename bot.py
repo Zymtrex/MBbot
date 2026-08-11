@@ -73,7 +73,7 @@ async def executors(ctx):
         return
 
     items = list(data.values() if isinstance(data, dict) else (data if isinstance(data, list) else []))
-    items_list = items[:25] # Discord 25-field limit fix
+    items_list = items[:25]
     
     for item in items_list:
         if not isinstance(item, dict):
@@ -81,12 +81,14 @@ async def executors(ctx):
         name = item.get("title") or item.get("name") or "Unknown"
         version = item.get("version", "N/A")
         
-        # Verbesserte Logik zur Erkennung, ob updated/working
+        # Korrigierte Prüfung für alle gängigen WEAO-Status-Formate
         is_updated = (
             item.get("isUpdated") is True or 
             item.get("updated") is True or 
-            str(item.get("status")).lower() in ["working", "updated", "true", "1"] or
-            str(item.get("updated")).lower() in ["true", "1"]
+            item.get("working") is True or
+            str(item.get("status")).lower() in ["working", "updated", "true", "1", "up to date"] or
+            str(item.get("updated")).lower() in ["true", "1"] or
+            str(item.get("isUpdated")).lower() in ["true", "1"]
         )
         
         status_str = "🟢 **UPDATED**" if is_updated else "🔴 **NOT UPDATED**"

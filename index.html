@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBbot | Discord Utility & Tracker Bot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: #1e293b;
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #ffffff;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: #94a3b8;
+            max-width: 600px;
+            margin: 0 auto 2rem auto;
+        }
+
+        .btn {
+            display: inline-block;
+            background-color: #5865F2;
+            color: white;
+            padding: 0.8rem 1.8rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.2s ease;
+        }
+
+        .btn:hover {
+            background-color: #4752C4;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            max-width: 1100px;
+            margin: 3rem auto;
+            padding: 0 2rem;
+        }
+
+        .card {
+            background-color: #1e293b;
+            padding: 1.8rem;
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+
+        .card h3 {
+            color: #38bdf8;
+            margin-bottom: 0.8rem;
+        }
+
+        .card p {
+            color: #94a3b8;
+            font-size: 0.95rem;
+        }
+
+        footer {
+            margin-top: auto;
+            text-align: center;
+            padding: 2rem;
+            background-color: #020617;
+            color: #64748b;
+            font-size: 0.9rem;
+            border-top: 1px solid #1e293b;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">🤖 MBbot</div>
+        <a href="https://discord.com" target="_blank" class="btn">Discord Server</a>
+    </header>
+
+    <section class="hero">
+        <h1>Dein Server Protection & Status Bot</h1>
+        <p>Automatisches Monitoring für Roblox-Updates, Executor-Status und aktiver Server-Schutz gegen Raids.</p>
+        <a href="https://discord.com" target="_blank" class="btn">Zu Discord hinzufügen</a>
+    </section>
+
+    <section class="features">
+        <div class="card">
+            <h3>🎮 Roblox Version Tracker</h3>
+            <p>Überwacht automatisch alle 30 Minuten die aktuellen Versionen von Windows, Mac, Android und iOS.</p>
+        </div>
+
+        <div class="card">
+            <h3>🛰️ Executor Status</h3>
+            <p>Echtzeit-Übersicht im Discord-Kanal, welche Executoren geupdatet und einsatzbereit sind.</p>
+        </div>
+
+        <div class="card">
+            <h3>🛡️ Honeypot Raid Protection</h3>
+            <p>Schützt deinen Server vor Bot-Raids durch automatische Fallen in speziell eingerichteten Kanälen.</p>
+        </div>
+    </section>
+
+    <footer>
+        &copy; 2026 MBbot | Powered by WEAO API & Render
+    </footer>
+
+</body>
+</html>

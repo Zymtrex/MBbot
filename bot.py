@@ -7,7 +7,7 @@ from discord.ext import commands
 from flask import Flask
 
 # ---------------------------------------------------------
-# 1. FLASK WEB SERVER (Verhindert Render Port/Timeout Crash)
+# 1. FLASK WEB SERVER (For Render Health Checks)
 # ---------------------------------------------------------
 app = Flask(__name__)
 
@@ -16,11 +16,9 @@ def home():
     return "MoneyBitch Bot status: ONLINE"
 
 def run_flask():
-    # Render weist automatisch einen PORT über die Umgebungsvariable zu
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
-# Startet den Webserver in einem separaten Thread
 threading.Thread(target=run_flask, daemon=True).start()
 
 # ---------------------------------------------------------
@@ -43,24 +41,27 @@ async def on_ready():
 @bot.command(name="ping")
 async def ping(ctx):
     latency = round(bot.latency * 1000)
-    await ctx.send(f"🏓 Pong! Latenz: `{latency}ms`")
+    await ctx.send(f"🏓 Pong! Latency: `{latency}ms`")
 
 @bot.command(name="supdate")
 async def supdate(ctx, *, update_text: str = None):
-    # Nachricht des Absenders löschen für ein sauberes Bild
+    # Delete author's trigger message for a clean channel layout
     try:
         await ctx.message.delete()
     except Exception:
         pass
 
     if not update_text:
-        await ctx.send("❌ Bitte gib eine Beschreibung an! Beispiel: `?supdate updated with noclip`", delete_after=5)
+        await ctx.send("❌ Please provide an update text! Example: `?supdate \"updated with noclip\"`", delete_after=5)
         return
 
-    # Modernes, professionelles Embed
+    # Strip quotes if the user passed the text inside "..."
+    clean_text = update_text.strip('"\'')
+
+    # Embed Layout
     embed = discord.Embed(
         title="🔄 New Update",
-        description=f"```{update_text}```",
+        description=clean_text,
         color=discord.Color.from_rgb(46, 204, 113),
         timestamp=datetime.utcnow()
     )
@@ -83,11 +84,11 @@ async def executors(ctx):
         try:
             async with session.get("https://whatexpsare.online/api/val", timeout=10) as response:
                 if response.status != 200:
-                    await ctx.send("⚠️ Fehler beim Abrufen der Executor-API.")
+                    await ctx.send("⚠️ Failed to fetch executor status from API.")
                     return
                 data = await response.json()
         except Exception:
-            await ctx.send("❌ Verbindung zur Executor-API fehlgeschlagen.")
+            await ctx.send("❌ Connection to executor API failed.")
             return
 
     embed = discord.Embed(
@@ -99,7 +100,7 @@ async def executors(ctx):
         name = item.get("title", item.get("name", "Unknown"))
         version = item.get("version", "N/A")
         
-        # Robuster Check auf Boolean, String oder Integer Wert
+        # Robust boolean/string/integer check for API response
         raw_updated = item.get("updated", False)
         is_updated = str(raw_updated).lower() in ["true", "1", "yes"]
 
@@ -117,5 +118,5 @@ async def executors(ctx):
 # ---------------------------------------------------------
 # 4. BOT RUN
 # ---------------------------------------------------------
-TOKEN = os.environ.get("DISCORD_TOKEN", "DEIN_BOT_TOKEN_HIER")
+TOKEN = os.environ.get("DISCORD_TOKEN", "YOUR_BOT_TOKEN_HERE")
 bot.run(TOKEN)

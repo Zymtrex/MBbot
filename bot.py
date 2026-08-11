@@ -1,7 +1,7 @@
 import os
 import threading
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 import aiohttp
 import discord
 from discord.ext import commands, tasks
@@ -55,8 +55,8 @@ HTML_TEMPLATE = """
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background-color: #f75a68;
-            box-shadow: 0 0 10px #f75a68;
+            background-color: #00e676;
+            box-shadow: 0 0 10px #00e676;
         }
         .grid {
             display: grid;
@@ -114,7 +114,7 @@ HTML_TEMPLATE = """
         <h1>MoneyBitch Bot Dashboard</h1>
         <div class="status-badge">
             <span class="status-dot"></span>
-            <span style="color: #f75a68;">OFFLINE</span>
+            <span style="color: #00e676;">ONLINE</span>
         </div>
     </div>
 
@@ -198,52 +198,70 @@ async def on_ready():
         auto_update_loop.start()
 
 # ---------------------------------------------------------
-# 3. HELPER FUNCTIONS FOR APIs
+# 3. HELPER FUNCTIONS FOR APIs (MIT FALLBACKS & USER-AGENT)
 # ---------------------------------------------------------
 async def fetch_roblox_versions():
-    url = "https://weao.xyz/api/versions/current"
+    headers = {'User-Agent': 'MoneyBitchBot/1.0.5'}
     async with aiohttp.ClientSession() as session:
+        # Versuch 1: WEAO API
         try:
-            async with session.get(url, timeout=10) as resp:
+            async with session.get("https://weao.xyz/api/versions/current", headers=headers, timeout=5) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+        except Exception:
+            pass
+
+        # Versuch 2: WhatExpsAre API Fallback
+        try:
+            async with session.get("https://whatexpsare.online/api/versions", headers=headers, timeout=5) as resp:
                 if resp.status == 200:
                     return await resp.json()
         except Exception as e:
             print(f"Error fetching Roblox versions: {e}")
+            
     return None
 
 async def fetch_executor_status():
-    url = "https://weao.xyz/api/status/exploits"
+    headers = {'User-Agent': 'MoneyBitchBot/1.0.5'}
     async with aiohttp.ClientSession() as session:
+        # Versuch 1: WEAO API
         try:
-            async with session.get(url, timeout=10) as resp:
+            async with session.get("https://weao.xyz/api/status/exploits", headers=headers, timeout=5) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+        except Exception:
+            pass
+
+        # Versuch 2: WhatExpsAre API Fallback
+        try:
+            async with session.get("https://whatexpsare.online/api/status", headers=headers, timeout=5) as resp:
                 if resp.status == 200:
                     return await resp.json()
         except Exception as e:
             print(f"Error fetching Executor status: {e}")
+
     return None
 
 def build_roblox_embed(data):
     embed = discord.Embed(
         title="🎮 Roblox Current Versions",
         color=discord.Color.from_rgb(52, 152, 219),
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
     if not data:
         embed.description = "❌ Failed to retrieve Roblox versions."
         return embed
 
-    # Mapping platform keys from API response
-    platforms = {
-        "WindowsPlayer": "💻 Windows",
-        "MacPlayer": "🍎 macOS",
-        "Android": "📱 Android",
-        "iOS": "📱 iOS"
-    }
+    # Flexibler Import für verschiedene API-Antwortformate
+    win = data.get("WindowsPlayer", {}).get("version") or data.get("Windows") or data.get("windows") or "Unknown"
+    mac = data.get("MacPlayer", {}).get("version") or data.get("Mac") or data.get("macOS") or "Unknown"
+    android = data.get("Android", {}).get("version") or data.get("Android") or data.get("android") or "Unknown"
+    ios = data.get("iOS", {}).get("version") or data.get("iOS") or data.get("ios") or "Unknown"
 
-    for key, name in platforms.items():
-        ver_info = data.get(key, {})
-        version = ver_info.get("version", "Unknown") if isinstance(ver_info, dict) else str(ver_info)
-        embed.add_field(name=name, value=f"`{version}`", inline=True)
+    embed.add_field(name="💻 Windows", value=f"`{win}`", inline=True)
+    embed.add_field(name="🍎 macOS", value=f"`{mac}`", inline=True)
+    embed.add_field(name="📱 Android", value=f"`{android}`", inline=True)
+    embed.add_field(name="📱 iOS", value=f"`{ios}`", inline=True)
 
     embed.set_footer(text="Auto-updates every 30 min | Source: weao.xyz | MoneyBitch Bot v1.0.5")
     return embed
@@ -252,21 +270,20 @@ def build_executors_embed(data):
     embed = discord.Embed(
         title="📡 Executor Status Overview",
         color=discord.Color.from_rgb(88, 101, 242),
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
     if not data:
         embed.description = "❌ Failed to retrieve executor status."
         return embed
 
-    # Data is expected to be a list of executor objects
-    for item in data:
-        name = item.get("title", item.get("name", "Unknown"))
-        version = item.get("version", "N/A")
-        
-        # Check boolean or string for updated status
-        raw_updated = item.get("updated", False)
-        is_updated = str(raw_updated).lower() in ["true", "1", "yes"]
+    exec_list = data if isinstance(data, list) else list(data.values())
 
+    for item in exec_list[:15]:  # Maximale Anzahl begrenzen
+        name = item.get("title") or item.get("name") or "Unknown"
+        version = item.get("version", "N/A")
+        raw_updated = item.get("updated", False) or item.get("status") == "working" or item.get("status") is True
+        
+        is_updated = str(raw_updated).lower() in ["true", "1", "yes", "working"]
         status_str = "🟢 **UPDATED**" if is_updated else "🔴 **NOT UPDATED**"
 
         embed.add_field(
@@ -310,7 +327,7 @@ async def auto_update_loop():
                     print(f"Failed to send Executor update to channel {channel_id}: {e}")
 
 # ---------------------------------------------------------
-# 5. COMMANDS
+# 5. COMMANDS & HONEYPOT
 # ---------------------------------------------------------
 @bot.command(name="ping")
 async def ping(ctx):
@@ -334,7 +351,7 @@ async def supdate(ctx, *, update_text: str = None):
         title="🔄 New Update",
         description=clean_text,
         color=discord.Color.from_rgb(46, 204, 113),
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
 
     embed.set_author(
@@ -356,12 +373,30 @@ async def roblox_cmd(ctx):
     embed = build_roblox_embed(data)
     await ctx.send(embed=embed)
 
-@bot.command(name="executors")
+# Nimmt sowohl ?executors als auch ?executor
+@bot.command(name="executors", aliases=["executor"])
 async def executors_cmd(ctx):
     executor_channels.add(ctx.channel.id)
     data = await fetch_executor_status()
     embed = build_executors_embed(data)
     await ctx.send(embed=embed)
+
+# Honeypot Schutz gegen Raid-Bots
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # Trap Channel Abfangung
+    if message.channel.name == "not-general":
+        try:
+            await message.author.ban(reason="Honeypot Trap triggered: Bot/Raid Protection")
+            await message.channel.send(f"🚨 **Honeypot:** User {message.author.mention} was banned for messaging in this protected channel.")
+        except Exception as e:
+            print(f"Failed to ban user in honeypot: {e}")
+        return
+
+    await bot.process_commands(message)
 
 # ---------------------------------------------------------
 # 6. RUN BOT

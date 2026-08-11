@@ -31,12 +31,16 @@ async def fetch_executor_status():
             async with session.get("https://weao.xyz/api/status/exploits", timeout=10) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    # Hier fangen wir ab, ob die API ein Dictionary mit Key/Value oder eine Liste liefert
+                    # Wir extrahieren die Liste absolut sicher, egal wie das JSON root-mäßig aufgebaut ist
                     if isinstance(data, dict):
-                        return data.get("exploits") or data.get("data") or data.values()
-                    return data
+                        for key in ["exploits", "data", "result", "items"]:
+                            if key in data and isinstance(data[key], list):
+                                return data[key]
+                        return list(data.values())
+                    elif isinstance(data, list):
+                        return data
         except: pass
-    return None
+    return []
 
 # 4. COMMANDS
 @bot.event
@@ -65,39 +69,34 @@ async def roblox(ctx):
 
 @bot.command(name="executors", aliases=["executor"])
 async def executors(ctx):
-    data = await fetch_executor_status()
+    items = await fetch_executor_status()
     embed = discord.Embed(title="📡 Executor Status Overview", color=0x5865f2)
     
-    if not data:
+    if not items:
         embed.description = "❌ No data received from WEAO API."
         await ctx.send(embed=embed)
         return
 
-    # Konvertiere sicher in eine Liste von Einträgen
-    if isinstance(data, dict):
-        items = list(data.values())
-    elif isinstance(data, list):
-        items = data
-    else:
-        items = []
-
-    items_list = items[:25]
-    
-    for item in items_list:
+    for item in items[:25]:
         if not isinstance(item, dict):
             continue
+            
         name = item.get("title") or item.get("name") or item.get("displayName") or "Unknown"
         version = item.get("version", "N/A")
         
-        # Exakte Prüfung für WEAO API (prüft ob updated == 1, True, oder string "1"/"true")
-        updated_val = item.get("updated") if item.get("updated") is not None else item.get("isUpdated")
+        # Alle möglichen Status-Varianten abdecken (Boolean, Integer 1/0, Strings)
+        updated_val = item.get("updated")
+        if updated_val is None:
+            updated_val = item.get("isUpdated")
         if updated_val is None:
             updated_val = item.get("working")
+        if updated_val is None:
+            updated_val = item.get("status")
 
         is_updated = (
             updated_val is True or 
             updated_val == 1 or 
-            str(updated_val).lower() in ["true", "1", "working", "up to date"]
+            str(updated_val).lower() in ["true", "1", "working", "up to date", "updated"]
         )
         
         status_str = "🟢 **UPDATED**" if is_updated else "🔴 **NOT UPDATED**"

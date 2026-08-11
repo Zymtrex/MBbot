@@ -31,8 +31,9 @@ async def fetch_executor_status():
             async with session.get("https://weao.xyz/api/status/exploits", timeout=10) as resp:
                 if resp.status == 200:
                     data = await resp.json()
+                    # Hier fangen wir ab, ob die API ein Dictionary mit Key/Value oder eine Liste liefert
                     if isinstance(data, dict):
-                        return data.get("exploits") or data.get("data") or data
+                        return data.get("exploits") or data.get("data") or data.values()
                     return data
         except: pass
     return None
@@ -72,23 +73,31 @@ async def executors(ctx):
         await ctx.send(embed=embed)
         return
 
-    items = list(data.values() if isinstance(data, dict) else (data if isinstance(data, list) else []))
+    # Konvertiere sicher in eine Liste von Einträgen
+    if isinstance(data, dict):
+        items = list(data.values())
+    elif isinstance(data, list):
+        items = data
+    else:
+        items = []
+
     items_list = items[:25]
     
     for item in items_list:
         if not isinstance(item, dict):
             continue
-        name = item.get("title") or item.get("name") or "Unknown"
+        name = item.get("title") or item.get("name") or item.get("displayName") or "Unknown"
         version = item.get("version", "N/A")
         
-        # Korrigierte Prüfung für alle gängigen WEAO-Status-Formate
+        # Exakte Prüfung für WEAO API (prüft ob updated == 1, True, oder string "1"/"true")
+        updated_val = item.get("updated") if item.get("updated") is not None else item.get("isUpdated")
+        if updated_val is None:
+            updated_val = item.get("working")
+
         is_updated = (
-            item.get("isUpdated") is True or 
-            item.get("updated") is True or 
-            item.get("working") is True or
-            str(item.get("status")).lower() in ["working", "updated", "true", "1", "up to date"] or
-            str(item.get("updated")).lower() in ["true", "1"] or
-            str(item.get("isUpdated")).lower() in ["true", "1"]
+            updated_val is True or 
+            updated_val == 1 or 
+            str(updated_val).lower() in ["true", "1", "working", "up to date"]
         )
         
         status_str = "🟢 **UPDATED**" if is_updated else "🔴 **NOT UPDATED**"

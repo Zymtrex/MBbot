@@ -158,6 +158,88 @@ async def auto_check_updates():
 
 
 # -------------------------------------------------------------------
+# FEATURE 3: CHAT COMMANDS (Prefix: ?)
+# -------------------------------------------------------------------
+@bot.command(name="ping")
+async def ping_command(ctx):
+    latency = round(bot.latency * 1000)
+    await ctx.send(f"🏓 Pong! Latency: `{latency}ms`")
+
+@bot.command(name="roblox")
+async def roblox_command(ctx):
+    urls = {
+        "Windows": "https://setup.rbxcdn.com/version",
+        "Mac": "https://setup.rbxcdn.com/mac/version",
+        "Android": "https://setup.rbxcdn.com/channel/common/deploy-android-app-version",
+        "iOS": "https://setup.rbxcdn.com/channel/common/deploy-ios-app-version"
+    }
+    current_versions = {}
+    async with aiohttp.ClientSession() as session:
+        for platform, url in urls.items():
+            try:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        current_versions[platform] = (await resp.text()).strip()
+                    else:
+                        current_versions[platform] = "Error fetching"
+            except Exception:
+                current_versions[platform] = "Error"
+
+    embed = discord.Embed(
+        title="🎮 Roblox Version Status",
+        color=discord.Color.blue(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
+    )
+    for platform, ver in current_versions.items():
+        embed.add_field(name=f"📱 {platform}", value=f"`{ver}`", inline=False)
+    embed.set_footer(text="MoneyBitch Bot")
+    await ctx.send(embed=embed)
+
+@bot.command(name="executors")
+async def executors_command(ctx):
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get("https://whatexpsare.online/api/status") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    embed = discord.Embed(
+                        title="🛰️ Executor Status Tracker",
+                        description="Live status overview from [whatexpsare.online](https://whatexpsare.online):",
+                        color=discord.Color.green(),
+                        timestamp=datetime.datetime.now(datetime.timezone.utc)
+                    )
+                    if isinstance(data, dict):
+                        for exec_name, info in list(data.items())[:10]:
+                            status = info.get("status", "Unknown") if isinstance(info, dict) else str(info)
+                            embed.add_field(name=exec_name, value=f"Status: **{status}**", inline=True)
+                    elif isinstance(data, list):
+                        for item in data[:10]:
+                            embed.add_field(
+                                name=item.get("name", "Unknown"), 
+                                value=f"Status: **{item.get('status', 'Unknown')}**", 
+                                inline=True
+                            )
+                    embed.set_footer(text="MoneyBitch Bot")
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send("❌ API aktuell nicht erreichbar.")
+        except Exception as e:
+            await ctx.send(f"❌ Fehler beim Abrufen der Executordaten: {e}")
+
+@bot.command(name="botinfo")
+async def botinfo_command(ctx):
+    embed = discord.Embed(
+        title="🤖 Bot Info",
+        description="MoneyBitch Bot - Tracking & Moderation",
+        color=discord.Color.purple()
+    )
+    embed.add_field(name="Prefix", value="`?`", inline=True)
+    embed.add_field(name="Ping", value=f"`{round(bot.latency * 1000)}ms`", inline=True)
+    embed.add_field(name="Befehle", value="`?ping`, `?roblox`, `?executors`, `?botinfo`", inline=False)
+    await ctx.send(embed=embed)
+
+
+# -------------------------------------------------------------------
 # MAIN RUNNER
 # -------------------------------------------------------------------
 async def main():

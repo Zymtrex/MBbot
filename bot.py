@@ -6,18 +6,52 @@ import datetime
 import os
 import asyncio
 
+# -------------------------------------------------------------------
+# CONFIGURATION / BERECHTIGUNGEN
+# -------------------------------------------------------------------
+# Trage hier die Namen oder IDs der Rollen ein, die die Befehle nutzen dürfen.
+# Administratoren haben IMMER automatisch Zugriff!
+# Beispiel: ALLOWED_ROLES = ["Admin", "Moderator", "VIP", 123456789012345678]
+ALLOWED_ROLES = ["owner", "moneybitch", "head staff", "mod", ]
+
+HTTP_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
 # Configure Intents
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-# Command prefix set to '?'
 bot = commands.Bot(command_prefix='?', intents=intents)
 
 # Globale Speicher-Variablen
 executor_status_msg_id = None
 roblox_version_msg_id = None
 last_versions = {}
+
+
+# -------------------------------------------------------------------
+# PERMISSION CHECK FUNCTION
+# -------------------------------------------------------------------
+def is_allowed_user():
+    async def predicate(ctx):
+        # 1. Automatisch erlauben, wenn der User Administrator-Rechte hat
+        if ctx.author.guild_permissions.administrator:
+            return True
+        
+        # 2. Prüfen, ob der User eine der erlaubten Rollen besitzt
+        if hasattr(ctx.author, "roles"):
+            user_role_names = [role.name for role in ctx.author.roles]
+            user_role_ids = [role.id for role in ctx.author.roles]
+            
+            for allowed in ALLOWED_ROLES:
+                if allowed in user_role_names or allowed in user_role_ids:
+                    return True
+                    
+        # Falls keine Bedingung zutrifft -> Fehler auslösen
+        raise commands.MissingPermissions(["Administrator or Allowed Role"])
+    return commands.check(predicate)
 
 
 # -------------------------------------------------------------------
@@ -46,32 +80,31 @@ async def on_ready():
 
 
 # -------------------------------------------------------------------
-# ADVANCED LOGGING & PERMISSION ERROR HANDLER
+# ADVANCED LOGGING & ERROR HANDLER
 # -------------------------------------------------------------------
 @bot.event
 async def on_command_completion(ctx):
-    # Loggt erfolgreiche Befehle in den Render-Console-Logs
     print(f"[COMMAND EXECUTED] User '{ctx.author}' (ID: {ctx.author.id}) used '{ctx.message.content}' in #{ctx.channel}")
 
 @bot.event
 async def on_command_error(ctx, error):
-    # Loggt fehlgeschlagene Versuche
     print(f"[COMMAND FAILED] User '{ctx.author}' (ID: {ctx.author.id}) tried '{ctx.message.content}' in #{ctx.channel} -> Reason: {error}")
 
-    # Berechtigungs-Fehler (z.B. wenn Rolle/Rechte fehlen)
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send(f"❌ You do not have the required permissions to use this command, {ctx.author.mention}!")
+    # Wenn Rollen oder Admin-Rechte fehlen
+    if isinstance(error, (commands.MissingPermissions, commands.CheckFailure)):
+        try:
+            await ctx.send(f"❌ You do not have permission or the required role to use this command, {ctx.author.mention}!")
+        except discord.Forbidden:
+            print(f"[PERM ERROR] Lacking permissions to send message in #{ctx.channel}")
     
-    # Falls der Befehl gar nicht existiert
     elif isinstance(error, commands.CommandNotFound):
-        pass  # Ignorieren oder optional eine Nachricht senden
+        pass  # Unbekannte Befehle ignorieren
 
-    # Alle anderen Fehler
     else:
         try:
-            await ctx.send(f"⚠️ An error occurred while running this command: `{error}`")
+            await ctx.send(f"⚠️ An error occurred while executing this command: `{error}`")
         except discord.Forbidden:
-            print(f"[PERM ERROR] Bot lacks permission to send messages in #{ctx.channel}!")
+            print(f"[PERM ERROR] Lacking permissions to send message in #{ctx.channel}")
 
 
 # -------------------------------------------------------------------
@@ -82,7 +115,6 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Debug Log in Render: Zeigt an, wer den Bot anschreibt
     if message.content.startswith("?"):
         print(f"[COMMAND ATTEMPT] User '{message.author}' (ID: {message.author.id}) sent: '{message.content}' in #{message.channel}")
 
@@ -120,18 +152,21 @@ async def auto_check_updates():
     }
 
     current_versions = {}
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=10)
+
+    # 1. Roblox Versions Abrufen
+    async with aiohttp.ClientSession(headers=HTTP_HEADERS, timeout=timeout) as session:
         for platform, url in urls.items():
             try:
                 async with session.get(url) as resp:
                     if resp.status == 200:
                         current_versions[platform] = (await resp.text()).strip()
                     else:
-                        current_versions[platform] = "Error fetching"
-            except Exception:
-                current_versions[platform] = "Error"
+                        current_versions[platform] = f"Error {resp.status}"
+            except Exception as e:
+                current_versions[platform] = f"Fetch Failed ({e})"
 
-    if current_versions != last_versions:
+    if current_versions and current_versions != last_versions:
         last_versions = current_versions.copy()
         
         embed_roblox = discord.Embed(
@@ -152,7 +187,8 @@ async def auto_check_updates():
                 except discord.Forbidden:
                     pass
 
-    async with aiohttp.ClientSession() as session:
+    # 2. Executor Status Abrufen (whatexpsare.online)
+    async with aiohttp.ClientSession(headers=HTTP_HEADERS, timeout=timeout) as session:
         try:
             async with session.get("https://whatexpsare.online/api/status") as resp:
                 if resp.status == 200:
@@ -165,11 +201,11 @@ async def auto_check_updates():
                     )
                     
                     if isinstance(data, dict):
-                        for exec_name, info in list(data.items())[:10]:
+                        for exec_name, info in list(data.items())[:12]:
                             status = info.get("status", "Unknown") if isinstance(info, dict) else str(info)
                             embed_exec.add_field(name=exec_name, value=f"Status: **{status}**", inline=True)
                     elif isinstance(data, list):
-                        for item in data[:10]:
+                        for item in data[:12]:
                             embed_exec.add_field(
                                 name=item.get("name", "Unknown"), 
                                 value=f"Status: **{item.get('status', 'Unknown')}**", 
@@ -185,19 +221,24 @@ async def auto_check_updates():
                                 await channel.send(embed=embed_exec)
                             except discord.Forbidden:
                                 pass
+                else:
+                    print(f"[ERROR] Executor API returned status code {resp.status}")
         except Exception as e:
             print(f"[ERROR] Executor fetch failed: {e}")
 
 
 # -------------------------------------------------------------------
-# FEATURE 3: CHAT COMMANDS (Prefix: ?)
+# FEATURE 3: RESTRICTED CHAT COMMANDS (Prefix: ?)
 # -------------------------------------------------------------------
 @bot.command(name="ping")
+@is_allowed_user()
 async def ping_command(ctx):
     latency = round(bot.latency * 1000)
     await ctx.send(f"🏓 Pong! Latency: `{latency}ms`")
 
+
 @bot.command(name="roblox")
+@is_allowed_user()
 async def roblox_command(ctx):
     urls = {
         "Windows": "https://setup.rbxcdn.com/version",
@@ -206,16 +247,18 @@ async def roblox_command(ctx):
         "iOS": "https://setup.rbxcdn.com/channel/common/deploy-ios-app-version"
     }
     current_versions = {}
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=10)
+
+    async with aiohttp.ClientSession(headers=HTTP_HEADERS, timeout=timeout) as session:
         for platform, url in urls.items():
             try:
                 async with session.get(url) as resp:
                     if resp.status == 200:
                         current_versions[platform] = (await resp.text()).strip()
                     else:
-                        current_versions[platform] = "Error fetching"
-            except Exception:
-                current_versions[platform] = "Error"
+                        current_versions[platform] = f"Error {resp.status}"
+            except Exception as e:
+                current_versions[platform] = f"Fetch Failed ({e})"
 
     embed = discord.Embed(
         title="🎮 Roblox Version Status",
@@ -227,9 +270,12 @@ async def roblox_command(ctx):
     embed.set_footer(text="MoneyBitch Bot")
     await ctx.send(embed=embed)
 
+
 @bot.command(name="executors")
+@is_allowed_user()
 async def executors_command(ctx):
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(headers=HTTP_HEADERS, timeout=timeout) as session:
         try:
             async with session.get("https://whatexpsare.online/api/status") as resp:
                 if resp.status == 200:
@@ -241,11 +287,11 @@ async def executors_command(ctx):
                         timestamp=datetime.datetime.now(datetime.timezone.utc)
                     )
                     if isinstance(data, dict):
-                        for exec_name, info in list(data.items())[:10]:
+                        for exec_name, info in list(data.items())[:12]:
                             status = info.get("status", "Unknown") if isinstance(info, dict) else str(info)
                             embed.add_field(name=exec_name, value=f"Status: **{status}**", inline=True)
                     elif isinstance(data, list):
-                        for item in data[:10]:
+                        for item in data[:12]:
                             embed.add_field(
                                 name=item.get("name", "Unknown"), 
                                 value=f"Status: **{item.get('status', 'Unknown')}**", 
@@ -254,11 +300,13 @@ async def executors_command(ctx):
                     embed.set_footer(text="MoneyBitch Bot")
                     await ctx.send(embed=embed)
                 else:
-                    await ctx.send("❌ API currently unavailable.")
+                    await ctx.send(f"❌ API currently unavailable (HTTP {resp.status}).")
         except Exception as e:
-            await ctx.send(f"❌ Error fetching executor data: {e}")
+            await ctx.send(f"❌ Error fetching executor data: `{e}`")
+
 
 @bot.command(name="botinfo")
+@is_allowed_user()
 async def botinfo_command(ctx):
     embed = discord.Embed(
         title="🤖 Bot Info",
@@ -267,13 +315,12 @@ async def botinfo_command(ctx):
     )
     embed.add_field(name="Prefix", value="`?`", inline=True)
     embed.add_field(name="Ping", value=f"`{round(bot.latency * 1000)}ms`", inline=True)
-    embed.add_field(name="Commands", value="`?ping`, `?roblox`, `?executors`, `?botinfo`", inline=False)
+    embed.add_field(name="Commands", value="`?ping`, `?roblox`, `?executors`, `?botinfo`, `?clear`", inline=False)
     await ctx.send(embed=embed)
 
 
-# Admin-Beispielbefehl (benötigt Administrator-Rechte)
 @bot.command(name="clear")
-@commands.has_permissions(administrator=True)
+@is_allowed_user()
 async def clear_command(ctx, amount: int = 5):
     await ctx.channel.purge(limit=amount + 1)
     await ctx.send(f"🧹 Deleted {amount} messages.", delete_after=3)

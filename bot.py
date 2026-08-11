@@ -17,7 +17,7 @@ bot = commands.Bot(command_prefix='?', intents=intents)
 # Globale Speicher-Variablen
 executor_status_msg_id = None
 roblox_version_msg_id = None
-last_versions = {}  # Merkt sich den letzten Stand aller Plattformen (Windows, Mac, Android, iOS)
+last_versions = {}
 
 
 # -------------------------------------------------------------------
@@ -39,20 +39,55 @@ async def start_web_server():
 
 @bot.event
 async def on_ready():
-    print(f'Bot is online as {bot.user.name}!')
+    print(f'✅ Bot logged in as: {bot.user.name} (ID: {bot.user.id})')
+    print(f'🌐 Connected to {len(bot.guilds)} server(s).')
     if not auto_check_updates.is_running():
         auto_check_updates.start()
 
 
 # -------------------------------------------------------------------
-# FEATURE 1: Honeypot (#not-general) -> Auto-Ban
+# ADVANCED LOGGING & PERMISSION ERROR HANDLER
+# -------------------------------------------------------------------
+@bot.event
+async def on_command_completion(ctx):
+    # Loggt erfolgreiche Befehle in den Render-Console-Logs
+    print(f"[COMMAND EXECUTED] User '{ctx.author}' (ID: {ctx.author.id}) used '{ctx.message.content}' in #{ctx.channel}")
+
+@bot.event
+async def on_command_error(ctx, error):
+    # Loggt fehlgeschlagene Versuche
+    print(f"[COMMAND FAILED] User '{ctx.author}' (ID: {ctx.author.id}) tried '{ctx.message.content}' in #{ctx.channel} -> Reason: {error}")
+
+    # Berechtigungs-Fehler (z.B. wenn Rolle/Rechte fehlen)
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send(f"❌ You do not have the required permissions to use this command, {ctx.author.mention}!")
+    
+    # Falls der Befehl gar nicht existiert
+    elif isinstance(error, commands.CommandNotFound):
+        pass  # Ignorieren oder optional eine Nachricht senden
+
+    # Alle anderen Fehler
+    else:
+        try:
+            await ctx.send(f"⚠️ An error occurred while running this command: `{error}`")
+        except discord.Forbidden:
+            print(f"[PERM ERROR] Bot lacks permission to send messages in #{ctx.channel}!")
+
+
+# -------------------------------------------------------------------
+# FEATURE 1: Honeypot (#not-general) & Message Event
 # -------------------------------------------------------------------
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    if "not-general" in message.channel.name.lower():
+    # Debug Log in Render: Zeigt an, wer den Bot anschreibt
+    if message.content.startswith("?"):
+        print(f"[COMMAND ATTEMPT] User '{message.author}' (ID: {message.author.id}) sent: '{message.content}' in #{message.channel}")
+
+    # Honeypot Check
+    if hasattr(message.channel, "name") and message.channel.name and "not-general" in message.channel.name.lower():
         try:
             await message.delete()
             await message.guild.ban(
@@ -62,9 +97,9 @@ async def on_message(message):
             )
             print(f"[HONEYPOT] {message.author} was automatically banned.")
         except discord.Forbidden:
-            print(f"[ERROR] Missing permissions to ban {message.author}.")
+            print(f"[ERROR] Bot lacks permission to ban {message.author}.")
         except Exception as e:
-            print(f"[ERROR] {e}")
+            print(f"[ERROR] Honeypot error: {e}")
         return
 
     await bot.process_commands(message)
@@ -77,7 +112,6 @@ async def on_message(message):
 async def auto_check_updates():
     global executor_status_msg_id, roblox_version_msg_id, last_versions
 
-    # 1. Roblox Versions Abrufen
     urls = {
         "Windows": "https://setup.rbxcdn.com/version",
         "Mac": "https://setup.rbxcdn.com/mac/version",
@@ -97,7 +131,6 @@ async def auto_check_updates():
             except Exception:
                 current_versions[platform] = "Error"
 
-    # Prüfen auf Änderungen bei Roblox
     if current_versions != last_versions:
         last_versions = current_versions.copy()
         
@@ -119,7 +152,6 @@ async def auto_check_updates():
                 except discord.Forbidden:
                     pass
 
-    # 2. Executor Status Abrufen (whatexpsare.online)
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get("https://whatexpsare.online/api/status") as resp:
@@ -222,9 +254,9 @@ async def executors_command(ctx):
                     embed.set_footer(text="MoneyBitch Bot")
                     await ctx.send(embed=embed)
                 else:
-                    await ctx.send("❌ API aktuell nicht erreichbar.")
+                    await ctx.send("❌ API currently unavailable.")
         except Exception as e:
-            await ctx.send(f"❌ Fehler beim Abrufen der Executordaten: {e}")
+            await ctx.send(f"❌ Error fetching executor data: {e}")
 
 @bot.command(name="botinfo")
 async def botinfo_command(ctx):
@@ -235,8 +267,16 @@ async def botinfo_command(ctx):
     )
     embed.add_field(name="Prefix", value="`?`", inline=True)
     embed.add_field(name="Ping", value=f"`{round(bot.latency * 1000)}ms`", inline=True)
-    embed.add_field(name="Befehle", value="`?ping`, `?roblox`, `?executors`, `?botinfo`", inline=False)
+    embed.add_field(name="Commands", value="`?ping`, `?roblox`, `?executors`, `?botinfo`", inline=False)
     await ctx.send(embed=embed)
+
+
+# Admin-Beispielbefehl (benötigt Administrator-Rechte)
+@bot.command(name="clear")
+@commands.has_permissions(administrator=True)
+async def clear_command(ctx, amount: int = 5):
+    await ctx.channel.purge(limit=amount + 1)
+    await ctx.send(f"🧹 Deleted {amount} messages.", delete_after=3)
 
 
 # -------------------------------------------------------------------
@@ -248,10 +288,8 @@ async def main():
         print("CRITICAL ERROR: 'DISCORD_TOKEN' environment variable is missing!")
         return
 
-    # Start Dummy Webserver für Render
     await start_web_server()
     
-    # Start Discord Bot
     async with bot:
         await bot.start(token)
 

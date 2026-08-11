@@ -103,6 +103,47 @@
             background-color: #4752C4;
         }
 
+        /* Status Badge Styling */
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-online {
+            background-color: rgba(46, 204, 113, 0.15);
+            color: #2ecc71;
+            border: 1px solid #2ecc71;
+        }
+        .status-online .dot { background-color: #2ecc71; box-shadow: 0 0 8px #2ecc71; }
+
+        .status-updated {
+            background-color: rgba(52, 152, 219, 0.15);
+            color: #3498db;
+            border: 1px solid #3498db;
+        }
+        .status-updated .dot { background-color: #3498db; box-shadow: 0 0 8px #3498db; }
+
+        .status-offline {
+            background-color: rgba(231, 76, 60, 0.15);
+            color: #e74c3c;
+            border: 1px solid #e74c3c;
+        }
+        .status-offline .dot { background-color: #e74c3c; box-shadow: 0 0 8px #e74c3c; }
+
         .admin-warning {
             font-size: 0.82rem;
             color: #aaaaaa;
@@ -130,6 +171,30 @@
             color: #cccccc;
             max-width: 650px;
             margin: 0 auto;
+        }
+
+        /* Status Display Box in Hero Section */
+        .status-box-container {
+            max-width: 380px;
+            margin: 2rem auto 1rem auto;
+            background: rgba(15, 15, 15, 0.9);
+            padding: 1.2rem 1.5rem;
+            border-radius: 12px;
+            border: 2px solid #555555;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            transition: border-color 0.3s ease;
+        }
+
+        .status-box-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-box-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #ffffff;
         }
 
         .features {
@@ -243,6 +308,12 @@
         </div>
 
         <div class="header-actions">
+            <!-- Header Status Badge -->
+            <div id="headerStatusBadge" class="status-badge">
+                <span class="dot"></span>
+                <span id="headerStatusText">---</span>
+            </div>
+
             <div class="header-box">
                 <span class="header-label">download discord here</span>
                 <a href="https://discord.com/download" target="_blank" class="btn">download now</a>
@@ -258,6 +329,18 @@
     <section class="hero">
         <h1>Your Server Protection & Status Bot</h1>
         <p>Automated monitoring for Roblox updates, executor statuses, and active server raid protection.</p>
+        
+        <!-- Hero Status Card -->
+        <div class="status-box-container" id="statusCard">
+            <div class="status-box-header">
+                <span class="status-box-title">System Status</span>
+                <div id="heroStatusBadge" class="status-badge">
+                    <span class="dot"></span>
+                    <span id="heroStatusText">---</span>
+                </div>
+            </div>
+        </div>
+
         <a href="https://discord.com/oauth2/authorize?client_id=1536164065200836618&permissions=8&integration_type=0&scope=bot+applications.commands" target="_blank" class="btn btn-main">🤖 Add Bot to Your Server</a>
         <p class="admin-warning">This bot requests Administrator permissions, so it is up to you whether you want to use it and trust us.</p>
     </section>
@@ -316,6 +399,63 @@
             <span>Website Version: v1.0.3</span>
         </div>
     </footer>
+
+    <!-- AUTOMATISCHER STATUS CHECKER -->
+    <script>
+        // =========================================================
+        // HIER DEINEN STATUS EINTRAGEN: "ONLINE", "UPDATED" oder "OFFLINE"
+        // =========================================================
+        const CURRENT_STATUS = "OFFLINE"; 
+
+        function applyStatus(status) {
+            const headerBadge = document.getElementById('headerStatusBadge');
+            const headerText = document.getElementById('headerStatusText');
+            const heroBadge = document.getElementById('heroStatusBadge');
+            const heroText = document.getElementById('heroStatusText');
+            const statusCard = document.getElementById('statusCard');
+
+            const cleanStatus = status.toUpperCase().trim();
+
+            // Status-Klassen auf Standard zurücksetzen
+            headerBadge.className = 'status-badge';
+            heroBadge.className = 'status-badge';
+
+            if (cleanStatus === 'ONLINE') {
+                headerBadge.classList.add('status-online');
+                heroBadge.classList.add('status-online');
+                headerText.innerText = 'ONLINE';
+                heroText.innerText = 'ONLINE';
+                if (statusCard) statusCard.style.borderColor = '#2ecc71';
+
+            } else if (cleanStatus === 'UPDATED') {
+                headerBadge.classList.add('status-updated');
+                heroBadge.classList.add('status-updated');
+                headerText.innerText = 'UPDATED';
+                heroText.innerText = 'UPDATED';
+                if (statusCard) statusCard.style.borderColor = '#3498db';
+
+            } else if (cleanStatus === 'OFFLINE') {
+                headerBadge.classList.add('status-offline');
+                heroBadge.classList.add('status-offline');
+                headerText.innerText = 'OFFLINE';
+                heroText.innerText = 'OFFLINE';
+                if (statusCard) statusCard.style.borderColor = '#e74c3c';
+
+            } else {
+                // Fallback, falls der Status unbekannt ist
+                headerBadge.classList.add('status-offline');
+                heroBadge.classList.add('status-offline');
+                headerText.innerText = cleanStatus;
+                heroText.innerText = cleanStatus;
+                if (statusCard) statusCard.style.borderColor = '#777777';
+            }
+        }
+
+        // Führt die Status-Anpassung aus, sobald die Seite geladen ist
+        document.addEventListener("DOMContentLoaded", function() {
+            applyStatus(CURRENT_STATUS);
+        });
+    </script>
 
 </body>
 </html>

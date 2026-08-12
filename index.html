@@ -154,6 +154,15 @@
             font-style: italic;
         }
 
+        .admin-warning a {
+            color: #0099ff;
+            text-decoration: none;
+        }
+
+        .admin-warning a:hover {
+            text-decoration: underline;
+        }
+
         .hero {
             text-align: center;
             padding: 4rem 2rem 2rem 2rem;
@@ -197,7 +206,7 @@
             color: #ffffff;
         }
 
-        /* --- KÄSTCHEN & CARDS STYLING (AN PASSENDES DESIGN ANGEPASST) --- */
+        /* --- KÄSTCHEN & CARDS STYLING --- */
         .features {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -256,7 +265,6 @@
             color: #38bdf8;
             font-weight: 600;
         }
-        /* ----------------------------------------------------------- */
 
         .credits-section {
             max-width: 1100px;
@@ -304,6 +312,23 @@
             align-items: center;
             flex-wrap: wrap;
             gap: 1rem;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .footer-links a {
+            color: #aaaaaa;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .footer-links a:hover {
+            color: #ffffff;
+            text-decoration: underline;
         }
 
         .versions {
@@ -357,7 +382,7 @@
         </div>
 
         <a href="https://discord.com/oauth2/authorize?client_id=1536164065200836618&permissions=8&integration_type=0&scope=bot+applications.commands" target="_blank" class="btn btn-main">Add Bot to Your Server</a>
-        <p class="admin-warning">This bot requests Administrator permissions, so it is up to you whether you want to use it and trust us.</p>
+        <p class="admin-warning">This bot requests Administrator permissions, so it is up to you whether you want to use it and trust us. By inviting the bot, you agree to the <a href="https://discord.com/terms" target="_blank">Discord Terms of Service</a>.</p>
     </section>
 
     <section class="features">
@@ -405,21 +430,20 @@
     </div>
 
     <footer>
-        <div>
-            &copy; 2026 MoneyBitch bot | All Rights Reserved
+        <div class="footer-links">
+            <span>&copy; 2026 MoneyBitch bot | All Rights Reserved</span>
+            <span>|</span>
+            <a href="https://discord.com/terms" target="_blank">Discord Terms of Service</a>
         </div>
         <div class="versions">
             <span>Bot Version: v1.0.9</span>
             <span>|</span>
-            <span>Website Version: v1.0.5</span>
+            <span>Website Version: v1.0.6</span>
         </div>
     </footer>
 
     <!-- AUTOMATISCHER STATUS CHECKER -->
     <script>
-        // =========================================================
-        // HIER DEINEN STATUS EINTRAGEN: "ONLINE", "UPDATED" oder "OFFLINE"
-        // =========================================================
         const CURRENT_STATUS = "UPDATED"; 
 
         function applyStatus(status) {
@@ -431,7 +455,6 @@
 
             const cleanStatus = status.toUpperCase().trim();
 
-            // Status-Klassen auf Standard zurücksetzen
             headerBadge.className = 'status-badge';
             heroBadge.className = 'status-badge';
 
@@ -457,7 +480,6 @@
                 if (statusCard) statusCard.style.borderColor = '#e74c3c';
 
             } else {
-                // Fallback, falls der Status unbekannt ist
                 headerBadge.classList.add('status-offline');
                 heroBadge.classList.add('status-offline');
                 headerText.innerText = cleanStatus;
@@ -466,7 +488,6 @@
             }
         }
 
-        // Führt die Status-Anpassung aus, sobald die Seite geladen ist
         document.addEventListener("DOMContentLoaded", function() {
             applyStatus(CURRENT_STATUS);
         });
